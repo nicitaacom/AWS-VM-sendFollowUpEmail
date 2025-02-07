@@ -216,14 +216,14 @@ try {
   // Execute the wrapped code in the VM
   const result = await vm.run(wrappedCode);
 
+  const cleanedBody = result.body.replace(/\\n/g, "\n").replace(/\\/g, '').replace(/\\/g, '')
   if (result?.statusCode !== 200) {
-    const cleanedError = result.body.replace(/\\n/g, "\n").replace(/\\/g, '').replace(/\\/g, '')
-    throw new Error(cleanedError);
+    throw new Error(cleanedBody);
   }
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result),
+    body: cleanedBody,
   };
 } catch (error) {
   const errorMessage: string = (error as Error)?.message || 'An unexpected error occurred';
