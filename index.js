@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.handler = void 0;
 const vm2_1 = __importDefault(require("vm2"));
 const { VM } = vm2_1.default;
+const resend_1 = require("resend"); // if env notification group is Email
 const ioredis_1 = __importDefault(require("ioredis"));
 const moment_timezone_1 = __importDefault(require("moment-timezone"));
 const supabase_js_1 = require("@supabase/supabase-js");
@@ -76,6 +77,8 @@ const handler = async (event) => {
         throw new Error(`Error ${response.status}: ${errorMessage || "Unknown error"}`);
     }
     const responseData = await response.json();
+    const encoder = new util_1.TextEncoder();
+    const decoder = new util_1.TextDecoder();
     const imports = {
         Redis: ioredis_1.default,
         moment: moment_timezone_1.default,
@@ -85,6 +88,10 @@ const handler = async (event) => {
         SendEmailCommand: client_ses_1.SendEmailCommand,
         SESClient: client_ses_1.SESClient,
         crypto: crypto_1.default,
+        encoder,
+        decoder,
+        Resend: // required to decryptResend (if env notification group is Email)
+        resend_1.Resend,
         decryptRedis
     };
     const vm = new VM({
@@ -105,7 +112,9 @@ const handler = async (event) => {
             .replace("export const handler = async (event) => {", '') // Remove handler definition line
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
-  const {  Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient, crypto, decryptRedis } = imports;
+  const {  Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
+  crypto, encoder, decoder, Resend,
+  decryptRedis } = imports;
 
   (async () => {
     try {
