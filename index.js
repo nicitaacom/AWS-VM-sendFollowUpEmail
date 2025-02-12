@@ -112,7 +112,7 @@ const handler = async (event) => {
             .replace("export const handler = async (event) => {", '') // Remove handler definition line
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
-  const {  Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
+  const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
   crypto, encoder, decoder, Resend,
   decryptRedis } = imports;
 
