@@ -199,7 +199,7 @@ try {
 
 
  const wrappedCode = `  
-  const {  Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
+  const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
   crypto, encoder, decoder, Resend,
   decryptRedis } = imports;
 
