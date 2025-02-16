@@ -143,7 +143,7 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL}api/
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL!, // Non-null assertion, validated above
+    "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL,
   },
   cache: "no-cache", // Should be no cache to improve security
 });
