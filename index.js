@@ -42,7 +42,7 @@ async function decryptRedis(encrypted, scheduledEmailsKey) {
             const key = await crypto_1.default.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
-                iterations: 310000,
+                iterations: 310,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
@@ -68,7 +68,7 @@ const handler = async (event) => {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL, // Non-null assertion, validated above
+            "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL,
         },
         cache: "no-cache", // Should be no cache to improve security
     });
