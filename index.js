@@ -129,7 +129,7 @@ const handler = async (event) => {
         createClient: supabase_js_1.createClient,
         DeleteScheduleCommand: client_scheduler_1.DeleteScheduleCommand,
         SchedulerClient: client_scheduler_1.SchedulerClient,
-        SendEmailCommand: client_ses_1.SendEmailCommand,
+        SendRawEmailCommand: client_ses_1.SendRawEmailCommand,
         SESClient: client_ses_1.SESClient,
         crypto: crypto_1.default,
         encoder,
@@ -157,7 +157,7 @@ const handler = async (event) => {
             .replace("export const handler = async (event) => {", '') // Remove handler definition line
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
-  const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendEmailCommand, SESClient,
+  const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
   crypto, encoder, decoder, Resend,
   decryptRedis,decryptResend } = imports;
 
@@ -173,31 +173,81 @@ const handler = async (event) => {
 
       return result;
     } catch (error) {
-      return { statusCode: 400, body: error.message };
+      const errorResponse = {
+        statusCode: 500,
+        error: 'Failed to execute the code for VM-sendFollowUpEmail'
+      };
+      
+      if (error.message) {
+        const lines = error.message.split('\\n');
+        errorResponse.errorSummary = lines[0];
+        
+        lines.slice(1).forEach((line, idx) => {
+          if (line.trim()) {
+            errorResponse['errorInfo' + (idx + 1)] = line.trim();
+          }
+        });
+      }
+      
+      if (error.stack) {
+        const stackLines = error.stack.split('\\n');
+        stackLines.forEach((line, idx) => {
+          errorResponse['stackInfo' + (idx + 1)] = line.trim();
+        });
+      }
+      
+      return errorResponse;
     }
   })();
-`;
+  `;
         // Execute the wrapped code in the VM
         const result = await vm.run(wrappedCode);
-        const cleanedBody = result.body.replace(/\\n/g, "\n").replace(/\\/g, '').replace(/\\/g, '');
-        if (result?.statusCode !== 200) {
-            throw new Error(cleanedBody);
+        // Handle successful result
+        if (result?.statusCode === 200) {
+            return {
+                statusCode: 200,
+                ...result
+            };
         }
-        return {
-            statusCode: 200,
-            body: cleanedBody,
+        // Format error stack if available
+        let errorResponse = {
+            statusCode: 500,
+            error: 'Failed to execute the code for VM-sendFollowUpEmail'
         };
+        // Handle error response
+        if (result) {
+            // Copy all properties from result
+            Object.keys(result).forEach((key) => {
+                errorResponse[key] = result[key];
+            });
+        }
+        return errorResponse;
     }
     catch (error) {
-        const errorMessage = error?.message || 'An unexpected error occurred';
-        console.error('Error executing code in VM:', errorMessage);
-        return {
+        console.error('Error executing code in VM:', error);
+        // Create base error response
+        const errorResponse = {
             statusCode: 500,
-            body: JSON.stringify({
-                error: 'Failed to execute the code for VM-sendFollowUpEmail',
-                details: errorMessage,
-            }),
+            error: 'Failed to execute the code for VM-sendFollowUpEmail'
         };
+        // Format error message
+        if (error?.message) {
+            const messageLines = error.message.split('\n');
+            errorResponse.errorSummary = messageLines[0];
+            messageLines.slice(1).forEach((line, idx) => {
+                if (line.trim()) {
+                    errorResponse[`errorInfo${idx + 1}`] = line.trim();
+                }
+            });
+        }
+        // Format stack trace
+        if (error?.stack) {
+            const stackLines = error.stack.split('\n');
+            stackLines.forEach((line, idx) => {
+                errorResponse[`stackInfo${idx + 1}`] = line.trim();
+            });
+        }
+        return errorResponse;
     }
 };
 exports.handler = handler;
