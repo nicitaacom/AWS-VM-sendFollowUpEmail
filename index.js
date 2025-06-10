@@ -166,11 +166,6 @@ const handler = async (event) => {
       const result = await (async () => { 
         ${transformedCode} 
       })();
-
-      if (result?.statusCode !== 200) {
-        throw new Error(result.body);
-      }
-
       return result;
     } catch (error) {
       const errorResponse = {
