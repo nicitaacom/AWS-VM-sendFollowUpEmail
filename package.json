@@ -1,5 +1,8 @@
 {
   "description": "This is code that fetch code and execute it",
+  "scripts": {
+    "build": "tsc && rm -rf VM-sendFollowUpEmail.zip && zip -r VM-sendFollowUpEmail.zip index.js node_modules"
+  },
   "devDependencies": {
     "@types/mailparser": "^3.4.5",
     "@types/node": "^22.15.19",
