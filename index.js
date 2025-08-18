@@ -6,58 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.handler = exports.decryptDiscordWebhookUrl = exports.decryptTelegramBotToken = exports.decryptTelegramChatId = void 0;
 const vm2_1 = __importDefault(require("vm2"));
 const { VM } = vm2_1.default;
-const resend_1 = require("resend"); // if env notification group is Email
 const ioredis_1 = __importDefault(require("ioredis"));
 const moment_timezone_1 = __importDefault(require("moment-timezone"));
 const supabase_js_1 = require("@supabase/supabase-js");
 const client_scheduler_1 = require("@aws-sdk/client-scheduler");
 const client_ses_1 = require("@aws-sdk/client-ses");
-const crypto_1 = __importDefault(require("crypto"));
 const util_1 = require("util");
-// DO NOT use this function in VM - for some reason it work with resend but doesn't work with redis
-// I tried to change environment from node 22 to node 20 and ask chatGPT - useless
-async function decryptResend(encryptedResendEnvValue) {
-    try {
-        const encoder = new util_1.TextEncoder();
-        const decoder = new util_1.TextDecoder();
-        const secretKey = JSON.stringify({
-            secret: "DB",
-            provider: "resend",
-            APIKey: "someAPIKeyHere",
-        });
-        // Decode base64 to Uint8Array
-        const encryptedData = Buffer.from(encryptedResendEnvValue, "base64");
-        // Extract the salt, iv, and encrypted content
-        const salt = encryptedData.slice(0, 16);
-        const iv = encryptedData.slice(16, 28);
-        const encrypted = encryptedData.slice(28);
-        const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
-            "deriveKey",
-        ]);
-        // Derive the key
-        const key = await crypto_1.default.subtle.deriveKey({
-            name: "PBKDF2",
-            salt: salt,
-            iterations: 310,
-            hash: "SHA-256",
-        }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-        // Decrypt the data
-        const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, encrypted);
-        // Parse the decrypted data as JSON to extract key-value object
-        const decodedText = decoder.decode(decrypted);
-        const result = JSON.parse(decodedText);
-        // Ensure the object contains only key and value fields
-        if (Object.keys(result).length !== 2 || !('key' in result) || !('value' in result)) {
-            return "error: decrypted object must contain only key and value fields";
-        }
-        return { key: result.key, value: result.value };
-    }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during decryption.";
-        return `Decryption failed: ${errorMessage}`;
-    }
-}
-// DO NOT use this function in VM - for some reason it work with resend but doesn't work with redis
+// DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 // I tried to change environment from node 22 to node 20 and ask chatGPT - useless
 async function decryptRedis(encrypted, scheduledEmailsKey) {
     if (typeof window === "undefined") {
@@ -78,18 +33,18 @@ async function decryptRedis(encrypted, scheduledEmailsKey) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey"
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto_1.default.subtle.deriveKey({
+            const key = await crypto.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 310,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -100,7 +55,7 @@ async function decryptRedis(encrypted, scheduledEmailsKey) {
     }
     return "This function must be run on the server.";
 }
-// DO NOT use this function in VM - for some reason it work with resend but doesn't work with redis
+// DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 // I tried to change environment from node 22 to node 20 and ask chatGPT - useless
 async function decryptTelegramChatId(encryptedTelegramChatId) {
     if (typeof window === "undefined") {
@@ -121,18 +76,18 @@ async function decryptTelegramChatId(encryptedTelegramChatId) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto_1.default.subtle.deriveKey({
+            const key = await crypto.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 300,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -144,7 +99,7 @@ async function decryptTelegramChatId(encryptedTelegramChatId) {
     return "This function must be run on the server.";
 }
 exports.decryptTelegramChatId = decryptTelegramChatId;
-// DO NOT use this function in VM - for some reason it work with resend but doesn't work with redis
+// DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 async function decryptTelegramBotToken(encryptedTelegramBotToken) {
     if (typeof window === "undefined") {
         try {
@@ -164,18 +119,18 @@ async function decryptTelegramBotToken(encryptedTelegramBotToken) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto_1.default.subtle.deriveKey({
+            const key = await crypto.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 300,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -204,18 +159,18 @@ async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto_1.default.subtle.deriveKey({
+            const key = await crypto.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 328,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -247,8 +202,6 @@ const handler = async (event) => {
         throw new Error(`Error ${response.status}: ${errorMessage || "Unknown error"}`);
     }
     const responseData = await response.json();
-    const encoder = new util_1.TextEncoder();
-    const decoder = new util_1.TextDecoder();
     const imports = {
         Redis: ioredis_1.default,
         moment: moment_timezone_1.default,
@@ -257,13 +210,7 @@ const handler = async (event) => {
         SchedulerClient: client_scheduler_1.SchedulerClient,
         SendRawEmailCommand: client_ses_1.SendRawEmailCommand,
         SESClient: client_ses_1.SESClient,
-        crypto: crypto_1.default,
-        encoder,
-        decoder,
-        Resend: // required to decryptResend (if env notification group is Email)
-        resend_1.Resend,
         decryptRedis,
-        decryptResend,
         decryptDiscordWebhookUrl,
         decryptTelegramBotToken,
         decryptTelegramChatId
@@ -287,8 +234,7 @@ const handler = async (event) => {
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
   const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-  crypto, encoder, decoder, Resend,
-  decryptRedis, decryptResend,  decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId } = imports;
+          decryptRedis,  decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId } = imports;
 
   (async () => {
     try {
