@@ -213,7 +213,8 @@ const handler = async (event) => {
         decryptRedis,
         decryptDiscordWebhookUrl,
         decryptTelegramBotToken,
-        decryptTelegramChatId
+        decryptTelegramChatId,
+        setTimeout
     };
     const vm = new VM({
         timeout: 25000,
@@ -234,7 +235,7 @@ const handler = async (event) => {
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
   const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-          decryptRedis,  decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId } = imports;
+          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout } = imports;
 
   (async () => {
     try {

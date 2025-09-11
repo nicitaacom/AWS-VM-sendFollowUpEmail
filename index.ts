@@ -379,7 +379,8 @@ const imports = {
   decryptRedis,
   decryptDiscordWebhookUrl,
   decryptTelegramBotToken,
-  decryptTelegramChatId
+  decryptTelegramChatId,
+  setTimeout
 }
 
 const vm = new VM({
@@ -405,7 +406,7 @@ try {
 
  const wrappedCode = `  
   const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-          decryptRedis,  decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId } = imports;
+          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout } = imports;
 
   (async () => {
     try {
