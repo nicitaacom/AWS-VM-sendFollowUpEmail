@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.handler = exports.decryptDiscordWebhookUrl = exports.decryptTelegramBotToken = exports.decryptTelegramChatId = void 0;
 const vm2_1 = __importDefault(require("vm2"));
 const { VM } = vm2_1.default;
+const crypto_1 = __importDefault(require("crypto"));
 const ioredis_1 = __importDefault(require("ioredis"));
 const moment_timezone_1 = __importDefault(require("moment-timezone"));
 const supabase_js_1 = require("@supabase/supabase-js");
@@ -33,18 +34,18 @@ async function decryptRedis(encrypted, scheduledEmailsKey) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey"
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto.subtle.deriveKey({
+            const key = await crypto_1.default.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 310,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -76,18 +77,18 @@ async function decryptTelegramChatId(encryptedTelegramChatId) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto.subtle.deriveKey({
+            const key = await crypto_1.default.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 300,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -119,18 +120,18 @@ async function decryptTelegramBotToken(encryptedTelegramBotToken) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto.subtle.deriveKey({
+            const key = await crypto_1.default.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 300,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -159,18 +160,18 @@ async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
             const iv = combined.slice(16, 28);
             const ciphertext = combined.slice(28);
             // Create key material for PBKDF2
-            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
+            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
                 "deriveKey",
             ]);
             // Derive the decryption key using PBKDF2
-            const key = await crypto.subtle.deriveKey({
+            const key = await crypto_1.default.subtle.deriveKey({
                 name: "PBKDF2",
                 salt: salt,
                 iterations: 328,
                 hash: "SHA-256",
             }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
             // Decrypt the ciphertext
-            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
             // Return the decrypted plaintext as a string
             return [decoder.decode(decrypted)];
         }
@@ -214,7 +215,8 @@ const handler = async (event) => {
         decryptDiscordWebhookUrl,
         decryptTelegramBotToken,
         decryptTelegramChatId,
-        setTimeout
+        setTimeout,
+        crypto: crypto_1.default
     };
     const vm = new VM({
         timeout: 25000,
@@ -235,7 +237,7 @@ const handler = async (event) => {
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
   const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout } = imports;
+          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout, crypto } = imports;
 
   (async () => {
     try {

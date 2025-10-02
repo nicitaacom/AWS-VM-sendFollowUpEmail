@@ -1,6 +1,8 @@
 import VMModule from 'vm2';
 const { VM } = VMModule;
 
+import crypto from "crypto"
+
 import Redis from 'ioredis';
 import moment from 'moment-timezone';
 import { createClient } from "@supabase/supabase-js"
@@ -380,7 +382,8 @@ const imports = {
   decryptDiscordWebhookUrl,
   decryptTelegramBotToken,
   decryptTelegramChatId,
-  setTimeout
+  setTimeout,
+  crypto
 }
 
 const vm = new VM({
@@ -406,7 +409,7 @@ try {
 
  const wrappedCode = `  
   const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout } = imports;
+          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout, crypto } = imports;
 
   (async () => {
     try {
