@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handler = exports.decryptDiscordWebhookUrl = exports.decryptTelegramBotToken = exports.decryptTelegramChatId = void 0;
+exports.handler = void 0;
 const vm2_1 = __importDefault(require("vm2"));
 const { VM } = vm2_1.default;
 const crypto_1 = __importDefault(require("crypto"));
@@ -58,7 +58,7 @@ async function decryptRedis(encrypted, scheduledEmailsKey) {
 }
 // DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 // I tried to change environment from node 22 to node 20 and ask chatGPT - useless
-async function decryptTelegramChatId(encryptedTelegramChatId) {
+async function decryptTelegramChatId(encryptedTelegramChatId, redisKeyFor) {
     if (typeof window === "undefined") {
         try {
             const encoder = new util_1.TextEncoder();
@@ -69,6 +69,7 @@ async function decryptTelegramChatId(encryptedTelegramChatId) {
                 provider: "redis",
                 host: "AWS",
                 APIKey: "replace-with-your-api-key",
+                redisKeyFor,
             });
             // Convert the Base64-encoded string back to a Uint8Array
             const combined = Buffer.from(encryptedTelegramChatId, "base64");
@@ -99,9 +100,8 @@ async function decryptTelegramChatId(encryptedTelegramChatId) {
     }
     return "This function must be run on the server.";
 }
-exports.decryptTelegramChatId = decryptTelegramChatId;
 // DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
-async function decryptTelegramBotToken(encryptedTelegramBotToken) {
+async function decryptTelegramBotToken(encryptedTelegramBotToken, redisKeyFor) {
     if (typeof window === "undefined") {
         try {
             const encoder = new util_1.TextEncoder();
@@ -112,6 +112,7 @@ async function decryptTelegramBotToken(encryptedTelegramBotToken) {
                 provider: "redis",
                 host: "AWS",
                 APIKey: "replace-with-your-api-key",
+                redisKeyFor,
             });
             // Convert the Base64-encoded string back to a Uint8Array
             const combined = Buffer.from(encryptedTelegramBotToken, "base64");
@@ -142,8 +143,7 @@ async function decryptTelegramBotToken(encryptedTelegramBotToken) {
     }
     return "This function must be run on the server.";
 }
-exports.decryptTelegramBotToken = decryptTelegramBotToken;
-async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
+async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl, redisKeyFor) {
     if (typeof window === "undefined") {
         try {
             const encoder = new util_1.TextEncoder();
@@ -152,6 +152,7 @@ async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
             const secretKey = JSON.stringify({
                 provider: "redis",
                 APIKey: "replace-with-your-api-key",
+                redisKeyFor,
             });
             // Convert the Base64-encoded string back to a Uint8Array
             const combined = Buffer.from(encryptedDiscordWebhookUrl, "base64");
@@ -182,7 +183,7 @@ async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
     }
     return "This function must be run on the server.";
 }
-exports.decryptDiscordWebhookUrl = decryptDiscordWebhookUrl;
+// no decrypt twilio because I want want SMS functionality for metrics
 const handler = async (event) => {
     if (!process.env.NEXT_PUBLIC_PRODUCTION_URL || !process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
         return {
@@ -236,43 +237,43 @@ const handler = async (event) => {
             .replace("export const handler = async (event) => {", '') // Remove handler definition line
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
-  const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-          decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout, crypto } = imports;
+    const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
+            decryptRedis, decryptDiscordWebhookUrl, decryptTelegramBotToken, decryptTelegramChatId, setTimeout, crypto } = imports;
 
-  (async () => {
-    try {
-      const result = await (async () => { 
-        ${transformedCode} 
-      })();
-      return result;
-    } catch (error) {
-      const errorResponse = {
-        statusCode: 500,
-        error: 'Failed to execute the code for VM-sendFollowUpEmail'
-      };
-      
-      if (error.message) {
-        const lines = error.message.split('\\n');
-        errorResponse.errorSummary = lines[0];
+    (async () => {
+      try {
+        const result = await (async () => { 
+          ${transformedCode} 
+        })();
+        return result;
+      } catch (error) {
+        const errorResponse = {
+          statusCode: 500,
+          error: 'Failed to execute the code for VM-sendFollowUpEmail'
+        };
         
-        lines.slice(1).forEach((line, idx) => {
-          if (line.trim()) {
-            errorResponse['errorInfo' + (idx + 1)] = line.trim();
-          }
-        });
+        if (error.message) {
+          const lines = error.message.split('\\n');
+          errorResponse.errorSummary = lines[0];
+          
+          lines.slice(1).forEach((line, idx) => {
+            if (line.trim()) {
+              errorResponse['errorInfo' + (idx + 1)] = line.trim();
+            }
+          });
+        }
+        
+        if (error.stack) {
+          const stackLines = error.stack.split('\\n');
+          stackLines.forEach((line, idx) => {
+            errorResponse['stackInfo' + (idx + 1)] = line.trim();
+          });
+        }
+        
+        return errorResponse;
       }
-      
-      if (error.stack) {
-        const stackLines = error.stack.split('\\n');
-        stackLines.forEach((line, idx) => {
-          errorResponse['stackInfo' + (idx + 1)] = line.trim();
-        });
-      }
-      
-      return errorResponse;
-    }
-  })();
-  `;
+    })();
+    `;
         // Execute the wrapped code in the VM
         const result = await vm.run(wrappedCode);
         // Handle successful result
