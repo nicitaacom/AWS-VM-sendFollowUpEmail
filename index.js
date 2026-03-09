@@ -14,49 +14,6 @@ const client_scheduler_1 = require("@aws-sdk/client-scheduler");
 const client_ses_1 = require("@aws-sdk/client-ses");
 const util_1 = require("util");
 // DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
-// I tried to change environment from node 22 to node 20 and ask chatGPT - useless
-async function decryptRedis(encrypted, scheduledEmailsKey) {
-    if (typeof window === "undefined") {
-        try {
-            const encoder = new util_1.TextEncoder();
-            const decoder = new util_1.TextDecoder();
-            // Define the fixed secret key for decryption
-            const secretKey = JSON.stringify({
-                secret: "DB",
-                provider: "redis",
-                APIKey: "some-api-key",
-                scheduledEmailsKey
-            });
-            // Convert the Base64-encoded string back to a Uint8Array
-            const combined = Buffer.from(encrypted, "base64");
-            // Extract salt, IV, and ciphertext from the combined array
-            const salt = Uint8Array.from(combined.slice(0, 16));
-            const iv = combined.slice(16, 28);
-            const ciphertext = combined.slice(28);
-            // Create key material for PBKDF2
-            const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, [
-                "deriveKey"
-            ]);
-            // Derive the decryption key using PBKDF2
-            const key = await crypto_1.default.subtle.deriveKey({
-                name: "PBKDF2",
-                salt: salt,
-                iterations: 310,
-                hash: "SHA-256",
-            }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-            // Decrypt the ciphertext
-            const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
-            // Return the decrypted plaintext as a string
-            return [decoder.decode(decrypted)];
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during decryption.";
-            return `Decryption failed: ${errorMessage}`;
-        }
-    }
-    return "This function must be run on the server.";
-}
-// DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
     if (typeof window === "undefined") {
         try {
@@ -159,7 +116,6 @@ const handler = async (event) => {
         SchedulerClient: client_scheduler_1.SchedulerClient,
         SendRawEmailCommand: client_ses_1.SendRawEmailCommand,
         SESClient: client_ses_1.SESClient,
-        decryptRedis,
         decryptDiscordWebhookUrl,
         decryptTelegramEnvs,
         setTimeout,
@@ -184,7 +140,7 @@ const handler = async (event) => {
             .replace("};", ''); // Remove only the last closing `};`
         const wrappedCode = `  
     const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-            decryptRedis, decryptDiscordWebhookUrl, decryptTelegramEnvs, setTimeout, crypto } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, setTimeout, crypto } = imports;
 
     (async () => {
       try {
