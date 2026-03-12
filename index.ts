@@ -53,7 +53,8 @@ interface Event {
 
 
 
-
+const NEXT_PUBLIC_PRODUCTION_URL = "https://www.outreach-tool.com/"
+const NEXT_PUBLIC_PRODUCTION_AUTH_URL = "https://auth.outreach-tool.com/"
 
 
 
@@ -251,7 +252,7 @@ export const handler = async (event: Event) => {
 
   
 
-  if (!process.env.NEXT_PUBLIC_PRODUCTION_URL || !process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
+  if (!NEXT_PUBLIC_PRODUCTION_URL || !NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
     return {
       statusCode: 400,
       error: 'NEXT_PUBLIC_PRODUCTION_URL or NEXT_PUBLIC_PRODUCTION_AUTH_URL missing',
@@ -261,11 +262,11 @@ export const handler = async (event: Event) => {
 
 
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL}api/lambda/VM-sendFollowUpEmail`, {
+  const response = await fetch(`${NEXT_PUBLIC_PRODUCTION_AUTH_URL}api/lambda/VM-sendFollowUpEmail`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL,
+      "X-Forwarded-For": NEXT_PUBLIC_PRODUCTION_URL,
     },
     cache: "no-cache", // Should be no cache to improve security
   });
@@ -294,7 +295,7 @@ export const handler = async (event: Event) => {
   }
 
   const vm = new VM({
-    timeout: 25000, // 25 seconds to prevent Lambda timeout
+    timeout: 80000, // 80 seconds to prevent Lambda timeout (60s for delay and 20s for execution)
     sandbox: {
       process: {
         env: {...process.env},

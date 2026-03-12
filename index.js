@@ -13,6 +13,8 @@ const supabase_js_1 = require("@supabase/supabase-js");
 const client_scheduler_1 = require("@aws-sdk/client-scheduler");
 const client_ses_1 = require("@aws-sdk/client-ses");
 const util_1 = require("util");
+const NEXT_PUBLIC_PRODUCTION_URL = "https://www.outreach-tool.com/";
+const NEXT_PUBLIC_PRODUCTION_AUTH_URL = "https://auth.outreach-tool.com/";
 // DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl) {
     if (typeof window === "undefined") {
@@ -89,17 +91,17 @@ async function decryptTelegramEnvs(encryptedBase64) {
 exports.decryptTelegramEnvs = decryptTelegramEnvs;
 // no decrypt twilio because I want want SMS functionality for metrics
 const handler = async (event) => {
-    if (!process.env.NEXT_PUBLIC_PRODUCTION_URL || !process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
+    if (!NEXT_PUBLIC_PRODUCTION_URL || !NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
         return {
             statusCode: 400,
             error: 'NEXT_PUBLIC_PRODUCTION_URL or NEXT_PUBLIC_PRODUCTION_AUTH_URL missing',
         };
     }
-    const response = await fetch(`${process.env.NEXT_PUBLIC_PRODUCTION_AUTH_URL}api/lambda/VM-sendFollowUpEmail`, {
+    const response = await fetch(`${NEXT_PUBLIC_PRODUCTION_AUTH_URL}api/lambda/VM-sendFollowUpEmail`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "X-Forwarded-For": process.env.NEXT_PUBLIC_PRODUCTION_URL,
+            "X-Forwarded-For": NEXT_PUBLIC_PRODUCTION_URL,
         },
         cache: "no-cache", // Should be no cache to improve security
     });
@@ -122,7 +124,7 @@ const handler = async (event) => {
         crypto: crypto_1.default
     };
     const vm = new VM({
-        timeout: 25000,
+        timeout: 80000,
         sandbox: {
             process: {
                 env: { ...process.env },
