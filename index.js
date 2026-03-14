@@ -151,30 +151,22 @@ const handler = async (event) => {
         })();
         return result;
       } catch (error) {
-        const errorResponse = {
+        const messageLines = error.message?.split('\\n').filter(function(line) { return line.trim(); }) || [];
+        const stackLines = error.stack?.split('\\n').filter(function(line) { return line.trim(); }) || [];
+
+        var result = {
           statusCode: 500,
-          error: 'Failed to execute the code for VM-sendFollowUpEmail'
-        };
-        
-        if (error.message) {
-          const lines = error.message.split('\\n');
-          errorResponse.errorSummary = lines[0];
-          
-          lines.slice(1).forEach((line, idx) => {
-            if (line.trim()) {
-              errorResponse['errorInfo' + (idx + 1)] = line.trim();
-            }
-          });
+          error: 'Failed to execute the code for VM-sendFollowUpEmail',
+          message: messageLines[0] || 'Unknown error',
         }
-        
-        if (error.stack) {
-          const stackLines = error.stack.split('\\n');
-          stackLines.forEach((line, idx) => {
-            errorResponse['stackInfo' + (idx + 1)] = line.trim();
-          });
-        }
-        
-        return errorResponse;
+
+        // 1. additional message lines as message1, message2...
+        messageLines.slice(1).forEach(function(line, index) { result['message' + (index + 1)] = line; });
+
+        // 2. stack lines as stack1, stack2...
+        stackLines.forEach(function(line, index) { result['stack' + (index + 1)] = line; });
+
+        return result;
       }
     })();
     `;
