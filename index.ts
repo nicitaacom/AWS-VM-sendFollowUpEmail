@@ -1,14 +1,25 @@
 import VMModule from 'vm2';
 const { VM } = VMModule;
 
-import crypto from "crypto"
 
 import Redis from 'ioredis';
 import moment from 'moment-timezone';
 import { createClient } from "@supabase/supabase-js"
 import { SchedulerClient, DeleteScheduleCommand } from "@aws-sdk/client-scheduler";
 import { SESClient,  SendRawEmailCommand } from "@aws-sdk/client-ses";
+
+// should be imported but not passed to VM2 (cuz I don't use it)
+import crypto from "crypto"
 import { TextEncoder, TextDecoder } from "util";
+
+// Node related
+import { Buffer } from "buffer"
+import { URLSearchParams } from "url"
+
+
+// For freeEmailDomains - so I fetch from entiryRedis envs by correct userId (if sent from gmail cuz user.email domain might be ukr.net)
+import { readFileSync } from "fs"
+import path from "path"
 
 
 
@@ -280,6 +291,16 @@ export const handler = async (event: Event) => {
 
 
 
+  // 📁 Works because CommonJS has __dirname by default
+  const filePath = path.join(__dirname, "freeEmailList.txt")
+
+  const freeEmailDomains = readFileSync(filePath, "utf-8")
+    .split("\n")
+    .map(domain => domain.trim().toLowerCase())
+    .filter(Boolean) // remove empty lines
+
+  
+
   const imports = {
     Redis,
     moment,
@@ -290,8 +311,7 @@ export const handler = async (event: Event) => {
     SESClient,
     decryptDiscordWebhookUrl,
     decryptTelegramEnvs,
-    setTimeout,
-    crypto
+    freeEmailDomains
   }
 
   const vm = new VM({
@@ -300,7 +320,12 @@ export const handler = async (event: Event) => {
       process: {
         env: {...process.env},
       },
+      // Node related
+      setTimeout,
+      Buffer, // required for twilio Authorization token
+      URLSearchParams,
       fetch, // Pass fetch to the sandbox
+
       event, // Pass the event to the VM sandbox
       imports
     },
@@ -317,7 +342,7 @@ export const handler = async (event: Event) => {
 
   const wrappedCode = `  
     const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, setTimeout, crypto } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, freeEmailDomains } = imports;
 
     (async () => {
       try {
