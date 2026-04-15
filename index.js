@@ -151,90 +151,85 @@ const handler = async (event) => {
             imports
         },
     });
-    try {
-        // Make sure that responseData.code it's a index.js file that comes as a result of "tsc" command with "ESNext" in tsconfig.json
-        const transformedCode = responseData.code
-            // Remove the export handler function line, adjusting to potentially varying spaces
-            .replace("export const handler = async (event) => {", '') // Remove handler definition line
-            .replace("};", ''); // Remove only the last closing `};`
-        const wrappedCode = `  
-    const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, freeEmailDomains } = imports;
+    // Make sure that responseData.code it's a index.js file that comes as a result of "tsc" command with "ESNext" in tsconfig.json
+    const transformedCode = responseData.code
+        // Remove the export handler function line, adjusting to potentially varying spaces
+        .replace("export const handler = async (event) => {", '') // Remove handler definition line
+        .replace("};", ''); // Remove only the last closing `};`
+    // 1. extract ALL needed debug helpers
+    const debugConstMatch = transformedCode.match(/const DEBUG_DISCORD_WEBHOOK_URL\s*=\s*"([^"]+)"/);
+    const truncateMatch = transformedCode.match(/const truncateLongFields\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return JSON\.stringify\(parsed\)\s*\}/);
+    const validateMatch = transformedCode.match(/const validateParsedError\s*=\s*\(parsed\)\s*=>\s*[\s\S]*?typeof parsed\.lambdaFnName === "string"/);
+    const getErrorInfoMatch = transformedCode.match(/const getErrorInfo\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return \{ lambdaFnName, cause, formattedTime, processedMessage, parsingError \}\s*\}/);
+    const sendFnMatch = transformedCode.match(/const sendDiscordDebugMessage\s*=\s*async\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return true\s*\}/);
+    const getPartsFnMatch = transformedCode.match(/const getDiscordMessageParts\s*=\s*\(processedMessage,\s*headerLines(?:,\s*note)?\)\s*=>\s*\{[\s\S]*?return messageParts\s*\}/);
+    console.log(249, 'debugConst:', !!debugConstMatch, 'truncate:', !!truncateMatch, 'validate:', !!validateMatch);
+    const wrappedCode = `  
+    const { moment, Redis, SESClient, SendRawEmailCommand, createClient, SchedulerClient, DeleteScheduleCommand, freeEmailDomains } = imports;
 
     (async () => {
       try {
         const result = await (async () => { 
           ${transformedCode} 
         })();
-        return result;
+        return result
       } catch (error) {
-        const messageLines = error.message?.split('\\n').filter(function(line) { return line.trim(); }) || [];
-        const stackLines = error.stack?.split('\\n').filter(function(line) { return line.trim(); }) || [];
-
-        var result = {
-          statusCode: 500,
-          error: 'Failed to execute the code for VM-sendFollowUpEmail',
-          message: messageLines[0] || 'Unknown error',
-        }
-
-        // 1. additional message lines as message1, message2...
-        messageLines.slice(1).forEach(function(line, index) { result['message' + (index + 1)] = line; });
-
-        // 2. stack lines as stack1, stack2...
-        stackLines.forEach(function(line, index) { result['stack' + (index + 1)] = line; });
-
-        return result;
-      }
-    })();
-    `;
-        // Execute the wrapped code in the VM
-        const result = await vm.run(wrappedCode);
-        // Handle successful result
-        if (result?.statusCode === 200) {
-            return {
-                statusCode: 200,
-                ...result
-            };
-        }
-        // Format error stack if available
-        let errorResponse = {
-            statusCode: 500,
-            error: 'Failed to execute the code for VM-sendFollowUpEmail'
-        };
-        // Handle error response
-        if (result) {
-            // Copy all properties from result
-            Object.keys(result).forEach((key) => {
-                errorResponse[key] = result[key];
-            });
-        }
-        return errorResponse;
-    }
-    catch (error) {
-        console.error('Error executing code in VM:', error);
-        // Create base error response
         const errorResponse = {
+          statusCode: 500,
+          error: 'Failed to execute the code for VM-sendScheduledEmail'
+        }
+        
+        if (error.message) {
+          const lines = error.message.split('\n')
+          errorResponse.errorSummary = lines[0]
+          
+          lines.slice(1).forEach((line, idx) => {
+            if (line.trim()) errorResponse['errorInfo' + (idx + 1)] = line.trim()
+          })
+        }
+        
+        if (error.stack) {
+          const stackLines = error.stack.split('\n')
+          stackLines.forEach((line, idx) => {
+            errorResponse['stackInfo' + (idx + 1)] = line.trim()
+          })
+        }
+        
+        return errorResponse
+      }
+    })()
+  `;
+    // clean execution
+    const vmResult = vm.run(wrappedCode);
+    return vmResult
+        .then((vm2Resp) => vm2Resp?.statusCode === 200
+        ? { statusCode: 200, ...vm2Resp }
+        : { statusCode: 500, ...vm2Resp })
+        .catch(async (error) => {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        if (debugConstMatch && truncateMatch && validateMatch && getErrorInfoMatch && sendFnMatch && getPartsFnMatch) {
+            const debugCode = `
+          ${debugConstMatch[0]};
+          ${truncateMatch[0]};
+          ${validateMatch[0]};
+          ${getErrorInfoMatch[0]};
+          ${sendFnMatch[0]};
+          ${getPartsFnMatch[0]};
+          await sendDiscordDebugMessage(\`VM runtime error in transformedCode: ${errMsg.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)
+        `;
+            try {
+                await vm.run(`(async () => { ${debugCode} })()`);
+            }
+            catch (debugErr) {
+                const debugMessage = debugErr instanceof Error ? debugErr.message : String(debugErr);
+                console.log(250, 'debug send failed too:', debugMessage);
+            }
+        }
+        return {
             statusCode: 500,
-            error: 'Failed to execute the code for VM-sendFollowUpEmail'
+            error: 'Failed to execute the code for VM-sendFollowUpEmail',
+            message: errMsg,
         };
-        // Format error message
-        if (error?.message) {
-            const messageLines = error.message.split('\n');
-            errorResponse.errorSummary = messageLines[0];
-            messageLines.slice(1).forEach((line, idx) => {
-                if (line.trim()) {
-                    errorResponse[`errorInfo${idx + 1}`] = line.trim();
-                }
-            });
-        }
-        // Format stack trace
-        if (error?.stack) {
-            const stackLines = error.stack.split('\n');
-            stackLines.forEach((line, idx) => {
-                errorResponse[`stackInfo${idx + 1}`] = line.trim();
-            });
-        }
-        return errorResponse;
-    }
+    });
 };
 exports.handler = handler;
