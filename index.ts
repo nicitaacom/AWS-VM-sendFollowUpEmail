@@ -347,7 +347,8 @@ export const handler = async (event: Event) => {
 
 
     const wrappedCode = `  
-      const { moment, Redis, SESClient, SendRawEmailCommand, createClient, SchedulerClient, DeleteScheduleCommand, freeEmailDomains } = imports;
+      const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 
