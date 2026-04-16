@@ -351,37 +351,12 @@ export const handler = async (event: Event) => {
   const wrappedCode = `  
     const { moment, Redis, SESClient, SendRawEmailCommand, createClient, SchedulerClient, DeleteScheduleCommand, freeEmailDomains } = imports;
 
-    (async () => {
-      try {
-        const result = await (async () => { 
-          ${transformedCode} 
-        })();
-        return result
-      } catch (error) {
-        const errorResponse = {
-          statusCode: 500,
-          error: 'Failed to execute the code for VM-sendScheduledEmail'
-        }
-        
-        if (error.message) {
-          const lines = error.message.split('\n')
-          errorResponse.errorSummary = lines[0]
-          
-          lines.slice(1).forEach((line, idx) => {
-            if (line.trim()) errorResponse['errorInfo' + (idx + 1)] = line.trim()
-          })
-        }
-        
-        if (error.stack) {
-          const stackLines = error.stack.split('\n')
-          stackLines.forEach((line, idx) => {
-            errorResponse['stackInfo' + (idx + 1)] = line.trim()
-          })
-        }
-        
-        return errorResponse
-      }
-    })()
+      (async () => {
+          const response = await (async () => { 
+            ${transformedCode} 
+          })();
+          return response
+      })();
   `
 
   // clean execution
