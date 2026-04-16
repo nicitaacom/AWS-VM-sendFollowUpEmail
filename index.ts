@@ -332,24 +332,22 @@ export const handler = async (event: Event) => {
   });
 
 
-  // Make sure that responseData.code it's a index.js file that comes as a result of "tsc" command with "ESNext" in tsconfig.json
-  const transformedCode = responseData.code
-  // Remove the export handler function line, adjusting to potentially varying spaces
-  .replace("export const handler = async (event) => {", '') // Remove handler definition line
-  .replace("};", ''); // Remove only the last closing `};`
+    // Make sure that responseData.code it's a index.js file that comes as a result of "tsc" command with "ESNext" in tsconfig.json
+    const transformedCode = responseData.code
+        .replace("export const handler = async (event) => {", '')
+        .replace("};", '') // Remove only the last closing `};`
 
-  // 1. extract ALL needed debug helpers
-  const debugConstMatch = transformedCode.match(/const DEBUG_DISCORD_WEBHOOK_URL\s*=\s*"([^"]+)"/)
-  const truncateMatch = transformedCode.match(/const truncateLongFields\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return JSON\.stringify\(parsed\)\s*\}/)
-  const validateMatch = transformedCode.match(/const validateParsedError\s*=\s*\(parsed\)\s*=>\s*[\s\S]*?typeof parsed\.lambdaFnName === "string"/)
-  const getErrorInfoMatch = transformedCode.match(/const getErrorInfo\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return \{ lambdaFnName, cause, formattedTime, processedMessage, parsingError \}\s*\}/)
-  const sendFnMatch = transformedCode.match(/const sendDiscordDebugMessage\s*=\s*async\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return true\s*\}/)
-  const getPartsFnMatch = transformedCode.match(/const getDiscordMessageParts\s*=\s*\(processedMessage,\s*headerLines(?:,\s*note)?\)\s*=>\s*\{[\s\S]*?return messageParts\s*\}/)
+    // 1. extract ALL needed debug helpers
+    const debugConstMatch = transformedCode.match(/const DEBUG_DISCORD_WEBHOOK_URL\s*=\s*"([^"]+)"/)
+    const truncateMatch = transformedCode.match(/const truncateLongFields\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return JSON\.stringify\(parsed\)\s*\}/)
+    const validateMatch = transformedCode.match(/const validateParsedError\s*=\s*\(parsed\)\s*=>\s*[\s\S]*?typeof parsed\.lambdaFnName === "string"/)
+    const getErrorInfoMatch = transformedCode.match(/const getErrorInfo\s*=\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return \{ lambdaFnName, cause, formattedTime, processedMessage, parsingError \}\s*\}/)
+    const sendFnMatch = transformedCode.match(/const sendDiscordDebugMessage\s*=\s*async\s*\(errorMessage\)\s*=>\s*\{[\s\S]*?return true\s*\}/)
+    const getPartsFnMatch = transformedCode.match(/const getDiscordMessageParts\s*=\s*\(processedMessage,\s*headerLines(?:,\s*note)?\)\s*=>\s*\{[\s\S]*?return messageParts\s*\}/)
 
-  console.log(249, 'debugConst:', !!debugConstMatch, 'truncate:', !!truncateMatch, 'validate:', !!validateMatch)
 
-  const wrappedCode = `  
-    const { moment, Redis, SESClient, SendRawEmailCommand, createClient, SchedulerClient, DeleteScheduleCommand, freeEmailDomains } = imports;
+    const wrappedCode = `  
+      const { moment, Redis, SESClient, SendRawEmailCommand, createClient, SchedulerClient, DeleteScheduleCommand, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 
@@ -357,40 +355,46 @@ export const handler = async (event: Event) => {
           })();
           return response
       })();
-  `
+    `;
 
-  // clean execution
-  const vmResult = vm.run(wrappedCode)
+    // clean execution - vm.run returns Promise, do NOT await it
+    const vmPromise = vm.run(wrappedCode)
 
-  return vmResult
-    .then((vm2Resp:any) => vm2Resp?.statusCode === 200 
-      ? { statusCode: 200, ...vm2Resp }
-      : { statusCode: 500, ...vm2Resp })
-    .catch(async (error: unknown) => {
-      const errMsg = error instanceof Error ? error.message : String(error)
+    return vmPromise
+      .then((vm2Resp: any) => vm2Resp?.statusCode === 200 
+        ? { statusCode: 200, ...vm2Resp }
+        : { statusCode: vm2Resp?.statusCode || 500, ...vm2Resp })
+      .catch(async (error: unknown) => {
+        const errMsg = error instanceof Error ? error.message : String(error)
 
-      if (debugConstMatch && truncateMatch && validateMatch && getErrorInfoMatch && sendFnMatch && getPartsFnMatch) {
-        const debugCode = `
-          ${debugConstMatch[0]};
-          ${truncateMatch[0]};
-          ${validateMatch[0]};
-          ${getErrorInfoMatch[0]};
-          ${sendFnMatch[0]};
-          ${getPartsFnMatch[0]};
-          await sendDiscordDebugMessage(\`VM runtime error in transformedCode: ${errMsg.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)
-        `
-        try {
-          await vm.run(`(async () => { ${debugCode} })()`)
-        } catch (debugErr) {
-          const debugMessage = debugErr instanceof Error ? debugErr.message : String(debugErr)
-          console.log(250, 'debug send failed too:', debugMessage)
+        // send debug to discord if helpers exist
+        if (debugConstMatch && truncateMatch && validateMatch && getErrorInfoMatch && sendFnMatch && getPartsFnMatch) {
+          const debugCode = `
+            ${debugConstMatch[0]};
+            ${truncateMatch[0]};
+            ${validateMatch[0]};
+            ${getErrorInfoMatch[0]};
+            ${sendFnMatch[0]};
+            ${getPartsFnMatch[0]};
+            await sendDiscordDebugMessage(\`VM runtime error in transformedCode: ${errMsg.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)
+          `
+          try {
+            await vm.run(`(async () => { ${debugCode} })()`)
+            console.log(383, 'debug message sent to discord')
+          } catch (debugErr) {
+            const debugMessage = debugErr instanceof Error ? debugErr.message : String(debugErr)
+            console.log(386, 'debug send failed too:', debugMessage)
+          }
         }
-      }
 
-      return {
-        statusCode: 500,
-        error: 'Failed to execute the code for VM-sendFollowUpEmail',
-        message: errMsg,
-      }
-    })
+        // return the FULL error response from inside the VM (statusCode 400 + all details)
+        // this is the key fix - don't override with generic 500
+        return typeof error === 'object' && error !== null && 'statusCode' in error
+          ? error
+          : {
+              statusCode: 500,
+              error: 'Failed to execute the code for VM-sendFollowUpEmail',
+              message: errMsg,
+            }
+      })
 }
