@@ -174,24 +174,24 @@ const handler = async (event) => {
       })();
     `;
     // clean execution - vm.run returns Promise, do NOT await it
-    const vmPromise = vm.run(wrappedCode);
-    return vmPromise
-        .then((vm2Resp) => vm2Resp?.statusCode === 200
-        ? { statusCode: 200, ...vm2Resp }
-        : { statusCode: vm2Resp?.statusCode || 500, ...vm2Resp })
+    return vm.run(wrappedCode)
+        .then((vm2Resp) => {
+        if (!vm2Resp)
+            return { statusCode: 500, error: 'VM returned undefined (early return in transformedCode)' };
+        return { statusCode: vm2Resp.statusCode || 500, body: vm2Resp };
+    })
         .catch(async (error) => {
         const errMsg = error instanceof Error ? error.message : String(error);
-        // send debug to discord if helpers exist
         if (debugConstMatch && truncateMatch && validateMatch && getErrorInfoMatch && sendFnMatch && getPartsFnMatch) {
             const debugCode = `
-            ${debugConstMatch[0]};
-            ${truncateMatch[0]};
-            ${validateMatch[0]};
-            ${getErrorInfoMatch[0]};
-            ${sendFnMatch[0]};
-            ${getPartsFnMatch[0]};
-            await sendDiscordDebugMessage(\`VM runtime error in transformedCode: ${errMsg.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)
-          `;
+          ${debugConstMatch[0]};
+          ${truncateMatch[0]};
+          ${validateMatch[0]};
+          ${getErrorInfoMatch[0]};
+          ${sendFnMatch[0]};
+          ${getPartsFnMatch[0]};
+          await sendDiscordDebugMessage(\`VM runtime error in transformedCode: ${errMsg.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)
+        `;
             try {
                 await vm.run(`(async () => { ${debugCode} })()`);
                 console.log(383, 'debug message sent to discord');
@@ -201,15 +201,11 @@ const handler = async (event) => {
                 console.log(386, 'debug send failed too:', debugMessage);
             }
         }
-        // return the FULL error response from inside the VM (statusCode 400 + all details)
-        // this is the key fix - don't override with generic 500
-        return typeof error === 'object' && error !== null && 'statusCode' in error
-            ? error
-            : {
-                statusCode: 500,
-                error: 'Failed to execute the code for VM-sendFollowUpEmail',
-                message: errMsg,
-            };
+        return {
+            statusCode: 500,
+            error: 'Failed to execute the code for VM-sendFollowUpEmail',
+            message: errMsg,
+        };
     });
 };
 exports.handler = handler;
