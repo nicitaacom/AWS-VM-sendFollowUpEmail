@@ -4,9 +4,11 @@ const { VM } = VMModule;
 
 import Redis from 'ioredis';
 import moment from 'moment-timezone';
-import { createClient } from "@supabase/supabase-js"
 import { SchedulerClient, DeleteScheduleCommand } from "@aws-sdk/client-scheduler";
 import { SESClient,  SendRawEmailCommand } from "@aws-sdk/client-ses";
+
+import { createClient } from "@supabase/supabase-js"
+import PusherServer from "pusher"
 
 // should be imported but not passed to VM2 (cuz I don't use it)
 import crypto from "crypto"
@@ -311,6 +313,7 @@ export const handler = async (event: Event) => {
     SESClient,
     decryptDiscordWebhookUrl,
     decryptTelegramEnvs,
+    PusherServer,
     freeEmailDomains
   }
 
@@ -348,7 +351,7 @@ export const handler = async (event: Event) => {
 
     const wrappedCode = `  
       const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, freeEmailDomains } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, PusherServer, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 

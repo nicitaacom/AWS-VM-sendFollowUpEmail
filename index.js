@@ -8,9 +8,10 @@ const vm2_1 = __importDefault(require("vm2"));
 const { VM } = vm2_1.default;
 const ioredis_1 = __importDefault(require("ioredis"));
 const moment_timezone_1 = __importDefault(require("moment-timezone"));
-const supabase_js_1 = require("@supabase/supabase-js");
 const client_scheduler_1 = require("@aws-sdk/client-scheduler");
 const client_ses_1 = require("@aws-sdk/client-ses");
+const supabase_js_1 = require("@supabase/supabase-js");
+const pusher_1 = __importDefault(require("pusher"));
 // should be imported but not passed to VM2 (cuz I don't use it)
 const crypto_1 = __importDefault(require("crypto"));
 const util_1 = require("util");
@@ -133,6 +134,7 @@ const handler = async (event) => {
         SESClient: client_ses_1.SESClient,
         decryptDiscordWebhookUrl,
         decryptTelegramEnvs,
+        PusherServer: pusher_1.default,
         freeEmailDomains
     };
     const vm = new VM({
@@ -164,7 +166,7 @@ const handler = async (event) => {
     const getPartsFnMatch = transformedCode.match(/const getDiscordMessageParts\s*=\s*\(processedMessage,\s*headerLines(?:,\s*note)?\)\s*=>\s*\{[\s\S]*?return messageParts\s*\}/);
     const wrappedCode = `  
       const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, freeEmailDomains } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, PusherServer, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 
