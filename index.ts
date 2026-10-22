@@ -146,11 +146,6 @@ async function decryptDiscordWebhookUrl(encryptedDiscordWebhookUrl: string): Pro
 
 
 
-
-
-
-
-
 // DO NOT use this function in VM - for some reason it work with smth else but doesn't work with redis
 
 interface TelegramEnvs {
@@ -211,7 +206,37 @@ export async function decryptTelegramEnvs(encryptedBase64: string): Promise<Tele
 
 
 
-
+// DEPENDS ON: outreach-tool app/api/ai-decisions/decryptAICredentialsFn.ts - same PBKDF2 + AES-GCM, so the
+// spintax profile's ai_credentials open here too. Named apart from decryptAICredentialsFn, which VM-receiveEmails
+// takes from its own bundle
+async function decryptAISpintaxAPIKeyFn(encryptedBase64:string) {
+  try {
+    const encoder = new TextEncoder()
+    const combined = Buffer.from(encryptedBase64, "base64")
+    const salt = combined.subarray(0, 16)
+    const iv = combined.subarray(16, 28)
+    const encryptedData = combined.subarray(28)
+    const secretKey = JSON.stringify({
+      secret: "redis+supabase",
+      provider: "ai-credentials",
+      APIKey: "example-here",
+      route: "/",
+      reason: "ai-manages-emails",
+    })
+    const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, ["deriveKey"])
+    const key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    )
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedData)
+    return { apiKey: JSON.parse(new TextDecoder().decode(decrypted)) }
+  } catch (error) {
+    return `decryptAISpintaxAPIKeyFn failed: ${error instanceof Error ? error.message : String(error)}`
+  }
+}
 
 
 
@@ -311,8 +336,7 @@ export const handler = async (event: Event) => {
     SchedulerClient,
     SendRawEmailCommand,
     SESClient,
-    decryptDiscordWebhookUrl,
-    decryptTelegramEnvs,
+    decryptDiscordWebhookUrl, decryptTelegramEnvs, decryptAISpintaxAPIKeyFn,
     PusherServer,
     freeEmailDomains
   }
@@ -351,7 +375,8 @@ export const handler = async (event: Event) => {
 
     const wrappedCode = `  
       const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, PusherServer, freeEmailDomains } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, decryptAISpintaxAPIKeyFn,
+             PusherServer, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 

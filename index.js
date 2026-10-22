@@ -97,6 +97,32 @@ async function decryptTelegramEnvs(encryptedBase64) {
     return "This function must be run on the server.";
 }
 exports.decryptTelegramEnvs = decryptTelegramEnvs;
+// DEPENDS ON: outreach-tool app/api/ai-decisions/decryptAICredentialsFn.ts - same PBKDF2 + AES-GCM, so the
+// spintax profile's ai_credentials open here too. Named apart from decryptAICredentialsFn, which VM-receiveEmails
+// takes from its own bundle
+async function decryptAISpintaxAPIKeyFn(encryptedBase64) {
+    try {
+        const encoder = new util_1.TextEncoder();
+        const combined = buffer_1.Buffer.from(encryptedBase64, "base64");
+        const salt = combined.subarray(0, 16);
+        const iv = combined.subarray(16, 28);
+        const encryptedData = combined.subarray(28);
+        const secretKey = JSON.stringify({
+            secret: "redis+supabase",
+            provider: "ai-credentials",
+            APIKey: "example-here",
+            route: "/",
+            reason: "ai-manages-emails",
+        });
+        const keyMaterial = await crypto_1.default.subtle.importKey("raw", encoder.encode(secretKey), { name: "PBKDF2" }, false, ["deriveKey"]);
+        const key = await crypto_1.default.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+        const decrypted = await crypto_1.default.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedData);
+        return { apiKey: JSON.parse(new util_1.TextDecoder().decode(decrypted)) };
+    }
+    catch (error) {
+        return `decryptAISpintaxAPIKeyFn failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+}
 // no decrypt twilio because I want want SMS functionality for metrics
 const handler = async (event) => {
     if (!NEXT_PUBLIC_PRODUCTION_URL || !NEXT_PUBLIC_PRODUCTION_AUTH_URL) {
@@ -132,8 +158,7 @@ const handler = async (event) => {
         SchedulerClient: client_scheduler_1.SchedulerClient,
         SendRawEmailCommand: client_ses_1.SendRawEmailCommand,
         SESClient: client_ses_1.SESClient,
-        decryptDiscordWebhookUrl,
-        decryptTelegramEnvs,
+        decryptDiscordWebhookUrl, decryptTelegramEnvs, decryptAISpintaxAPIKeyFn,
         PusherServer: pusher_1.default,
         freeEmailDomains
     };
@@ -166,7 +191,8 @@ const handler = async (event) => {
     const getPartsFnMatch = transformedCode.match(/const getDiscordMessageParts\s*=\s*\(processedMessage,\s*headerLines(?:,\s*note)?\)\s*=>\s*\{[\s\S]*?return messageParts\s*\}/);
     const wrappedCode = `  
       const { Redis, moment, createClient, DeleteScheduleCommand, SchedulerClient, SendRawEmailCommand, SESClient,
-             decryptDiscordWebhookUrl, decryptTelegramEnvs, PusherServer, freeEmailDomains } = imports;
+             decryptDiscordWebhookUrl, decryptTelegramEnvs, decryptAISpintaxAPIKeyFn,
+             PusherServer, freeEmailDomains } = imports;
 
       (async () => {
           const response = await (async () => { 
